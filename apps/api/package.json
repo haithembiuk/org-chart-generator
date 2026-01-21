@@ -1,0 +1,36 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@trpc/next": "^11.0.0-rc.352",
+    "@trpc/server": "^11.0.0-rc.352",
+    "@types/papaparse": "^5.3.16",
+    "@vercel/blob": "^1.1.1",
+    "@vercel/kv": "^1.0.1",
+    "csv-parser": "^3.2.0",
+    "next": "^14.2.3",
+    "papaparse": "^5.5.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.3",
+    "typescript": "^5.4.5",
+    "vitest": "^3.2.4"
+  }
+}

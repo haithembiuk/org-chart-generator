@@ -1,0 +1,15 @@
+{
+  "name": "@config/env",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"No tests for config package\""
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
