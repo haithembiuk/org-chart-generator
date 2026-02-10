@@ -198,10 +198,8 @@ export const appRouter = router({
         // Validate structure
         const validation = aiParser.validateStructure(hierarchy)
 
-        // Persist employees to database so they can be used as managers for new employees
-        for (const employee of employeesWithIds) {
-          await databaseService.createEmployee(employee)
-        }
+        // Persist employees to database in bulk for better performance
+        await databaseService.bulkCreateEmployees(employeesWithIds)
 
         return {
           success: true,

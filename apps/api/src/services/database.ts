@@ -8,6 +8,7 @@ export interface DatabaseService {
   getOrganization(id: string): Promise<Organization | null>
   updateEmployee(employee: Employee): Promise<Employee>
   createEmployee(employee: Employee): Promise<Employee>
+  bulkCreateEmployees(employees: Employee[]): Promise<Employee[]>
   getEmployeesByOrganization(organizationId: string): Promise<Employee[]>
   getUserOrganizations(userId: string): Promise<Organization[]>
 }
@@ -57,6 +58,35 @@ export class VercelKVService implements DatabaseService {
     } catch (error) {
       console.error('Error creating employee:', error)
       throw new Error('Failed to create employee in database')
+    }
+  }
+
+  async bulkCreateEmployees(employees: Employee[]): Promise<Employee[]> {
+    try {
+      // Group employees by organization for efficient batch updates
+      const employeesByOrg = new Map<string, string[]>()
+
+      // Store all employees in a single pass
+      for (const employee of employees) {
+        memoryStore.set(`${this.EMPLOYEE_KEY_PREFIX}${employee.id}`, employee)
+
+        // Collect employee IDs by organization
+        const orgEmployees = employeesByOrg.get(employee.organizationId) || []
+        orgEmployees.push(employee.id)
+        employeesByOrg.set(employee.organizationId, orgEmployees)
+      }
+
+      // Batch update organization employee lists
+      employeesByOrg.forEach((employeeIds, organizationId) => {
+        const existingIds = memoryStore.get(`${this.ORGANIZATION_EMPLOYEES_KEY_PREFIX}${organizationId}`) || []
+        const newIds = [...existingIds, ...employeeIds.filter(id => !existingIds.includes(id))]
+        memoryStore.set(`${this.ORGANIZATION_EMPLOYEES_KEY_PREFIX}${organizationId}`, newIds)
+      })
+
+      return employees
+    } catch (error) {
+      console.error('Error bulk creating employees:', error)
+      throw new Error('Failed to bulk create employees in database')
     }
   }
 

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { ChevronDown, ChevronUp, ZoomIn, ZoomOut, Home } from 'lucide-react'
 import { Employee } from '../shared/index'
 
 export interface ChartNode {
@@ -19,6 +20,7 @@ export interface ChartViewerProps {
   onNodeHover?: (employee: Employee | null) => void
   onManagerChange?: (employeeId: string, newManagerId: string | null) => void
   onNodeEdit?: (employeeId: string, updatedData: { name: string; title: string }) => void
+  onCircularReferenceError?: (employeeId: string, targetId: string) => void
   isSaving?: boolean
   saveError?: string | null
   onSaveStatusChange?: (isSaving: boolean, error?: string | null) => void
@@ -33,6 +35,7 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
   onNodeHover,
   onManagerChange,
   onNodeEdit,
+  onCircularReferenceError,
   isSaving = false,
   saveError = null,
   onSaveStatusChange,
@@ -55,6 +58,10 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
   const [editFormData, setEditFormData] = useState({ name: '', title: '' })
   const [editSaveClicked, setEditSaveClicked] = useState(false)
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set())
+  const [focusedEmployeeId, setFocusedEmployeeId] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Build tree structure from flat employee array
   const buildTree = (employees: Employee[]): ChartNode[] => {
@@ -93,43 +100,146 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
     return rootEmployees.map(emp => buildNode(emp, 0))
   }
 
-  // Calculate node positions
+  // Calculate node positions with row wrapping for many direct reports
   const calculatePositions = (nodes: ChartNode[]): ChartNode[] => {
     const nodeWidth = 200
     const nodeHeight = 80
     const levelHeight = 120
     const siblingSpacing = 40
+    const maxChildrenPerRow = 5 // Wrap to new row after this many children
 
+    // Split children into rows
+    const splitIntoRows = (children: ChartNode[]): ChartNode[][] => {
+      if (children.length <= maxChildrenPerRow) return [children]
+      const rows: ChartNode[][] = []
+      for (let i = 0; i < children.length; i += maxChildrenPerRow) {
+        rows.push(children.slice(i, i + maxChildrenPerRow))
+      }
+      return rows
+    }
+
+    // Calculate subtree width recursively (always accounts for children's subtrees)
     const calculateSubtreeWidth = (node: ChartNode): number => {
       if (node.children.length === 0) return nodeWidth
-      
-      const childrenWidth = node.children.reduce((sum, child) => 
-        sum + calculateSubtreeWidth(child), 0
-      )
-      const spacingWidth = (node.children.length - 1) * siblingSpacing
-      return Math.max(nodeWidth, childrenWidth + spacingWidth)
+
+      const rows = splitIntoRows(node.children)
+
+      // For each row, sum the subtree widths of children in that row
+      const rowWidths = rows.map(row => {
+        const childrenWidth = row.reduce((sum, child) =>
+          sum + calculateSubtreeWidth(child), 0
+        )
+        const spacingWidth = (row.length - 1) * siblingSpacing
+        return childrenWidth + spacingWidth
+      })
+
+      // Subtree width is the max row width
+      return Math.max(nodeWidth, Math.max(...rowWidths))
+    }
+
+    // Calculate subtree height (number of levels deep, accounting for row wrapping)
+    const calculateSubtreeHeight = (node: ChartNode): number => {
+      if (node.children.length === 0) return 1
+
+      const rows = splitIntoRows(node.children)
+      const numRows = rows.length
+
+      // Get max height among all children
+      const maxChildHeight = Math.max(...node.children.map(child => calculateSubtreeHeight(child)))
+
+      // Height = 1 (this node) + (numRows - 1) for extra wrapped rows + max child subtree height
+      return 1 + (numRows - 1) + maxChildHeight
+    }
+
+    // Calculate the vertical offset needed for a row based on previous rows' subtree depths
+    const calculateRowYOffset = (rows: ChartNode[][], rowIndex: number): number => {
+      if (rowIndex === 0) return 0
+
+      let offset = 0
+      for (let i = 0; i < rowIndex; i++) {
+        // For each previous row, find the max subtree height
+        const maxSubtreeHeight = Math.max(...rows[i].map(child => calculateSubtreeHeight(child)))
+        // Add enough space for that subtree plus some padding
+        offset += maxSubtreeHeight * levelHeight
+      }
+      return offset
+    }
+
+    // Store y-offsets for nodes to handle wrapped rows
+    const nodeYOffsets = new Map<string, number>()
+
+    // First pass: calculate y-offsets for all nodes with dynamic row spacing
+    const calculateYOffsets = (nodes: ChartNode[], parentYOffset: number): void => {
+      nodes.forEach(node => {
+        nodeYOffsets.set(node.id, parentYOffset)
+
+        const rows = splitIntoRows(node.children)
+        rows.forEach((row, rowIndex) => {
+          const childYOffset = parentYOffset + calculateRowYOffset(rows, rowIndex)
+          row.forEach(child => {
+            nodeYOffsets.set(child.id, childYOffset)
+            calculateYOffsets([child], childYOffset)
+          })
+        })
+      })
+    }
+
+    // Position a single node and its children recursively
+    const positionNode = (node: ChartNode, nodeX: number, startY: number): ChartNode => {
+      const yOffset = nodeYOffsets.get(node.id) || 0
+      const nodeY = startY + node.level * levelHeight + yOffset
+
+      const rows = splitIntoRows(node.children)
+      const positionedChildren: ChartNode[] = []
+
+      if (node.children.length === 0) {
+        // No children - nothing to position
+      } else {
+        // Position each row of children, accounting for subtree widths
+        const parentCenterX = nodeX + nodeWidth / 2
+
+        rows.forEach((row) => {
+          // Calculate actual row width based on subtrees
+          const rowSubtreeWidth = row.reduce((sum, child) =>
+            sum + calculateSubtreeWidth(child), 0
+          ) + (row.length - 1) * siblingSpacing
+
+          let childX = parentCenterX - rowSubtreeWidth / 2
+
+          row.forEach(child => {
+            const childSubtreeWidth = calculateSubtreeWidth(child)
+            const childNodeX = childX + childSubtreeWidth / 2 - nodeWidth / 2
+            const positionedChild = positionNode(child, childNodeX, startY)
+            positionedChildren.push(positionedChild)
+            childX += childSubtreeWidth + siblingSpacing
+          })
+        })
+      }
+
+      return {
+        ...node,
+        x: nodeX,
+        y: nodeY,
+        children: positionedChildren
+      }
     }
 
     const positionNodes = (nodes: ChartNode[], startX: number, startY: number): ChartNode[] => {
       let currentX = startX
-      
+
       return nodes.map(node => {
         const subtreeWidth = calculateSubtreeWidth(node)
         const nodeX = currentX + subtreeWidth / 2 - nodeWidth / 2
-        const nodeY = startY + node.level * levelHeight
-
-        const positionedNode: ChartNode = {
-          ...node,
-          x: nodeX,
-          y: nodeY,
-          children: positionNodes(node.children, currentX, startY)
-        }
-
+        const positionedNode = positionNode(node, nodeX, startY)
         currentX += subtreeWidth + siblingSpacing
         return positionedNode
       })
     }
 
+    // First pass: calculate y-offsets
+    calculateYOffsets(nodes, 0)
+
+    // Second pass: position nodes
     return positionNodes(nodes, 0, 50)
   }
 
@@ -157,28 +267,122 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
     return connections
   }
 
-  // Helper function to check if a node has children (including collapsed ones)
-  const nodeHasChildren = (nodeId: string): boolean => {
-    const childrenMap = new Map<string, Employee[]>()
+  // Memoized children map - built once per employees change instead of per nodeHasChildren call
+  const childrenMapCached = useMemo(() => {
+    const map = new Map<string, Employee[]>()
     employees.forEach(emp => {
       if (emp.managerId) {
-        if (!childrenMap.has(emp.managerId)) {
-          childrenMap.set(emp.managerId, [])
+        if (!map.has(emp.managerId)) {
+          map.set(emp.managerId, [])
         }
-        childrenMap.get(emp.managerId)!.push(emp)
+        map.get(emp.managerId)!.push(emp)
       }
     })
-    return (childrenMap.get(nodeId) || []).length > 0
-  }
+    return map
+  }, [employees])
 
-  const treeData = buildTree(employees)
-  const positionedTree = calculatePositions(treeData)
-  const allNodes = getAllNodes(positionedTree)
-  const connections = getConnections(positionedTree)
+  // Helper function to check if a node has children (including collapsed ones)
+  const nodeHasChildren = useCallback((nodeId: string): boolean => {
+    return (childrenMapCached.get(nodeId) || []).length > 0
+  }, [childrenMapCached])
 
-  // Calculate total dimensions
-  const totalWidth = allNodes.length > 0 ? Math.max(...allNodes.map(n => n.x + 200)) : 800
-  const totalHeight = allNodes.length > 0 ? Math.max(...allNodes.map(n => n.y + 80)) + 100 : 600
+  // Build employee lookup map for efficient access
+  const employeeMap = useMemo(() => {
+    const map = new Map<string, Employee>()
+    employees.forEach(emp => map.set(emp.id, emp))
+    return map
+  }, [employees])
+
+  // Get all ancestors (manager chain) for an employee
+  const getAncestors = useCallback((employeeId: string): Set<string> => {
+    const ancestors = new Set<string>()
+    let currentId: string | null | undefined = employeeMap.get(employeeId)?.managerId
+    while (currentId) {
+      ancestors.add(currentId)
+      currentId = employeeMap.get(currentId)?.managerId
+    }
+    return ancestors
+  }, [employeeMap])
+
+  // Get direct reports only (one level down) for an employee
+  const getDirectReports = useCallback((employeeId: string): Set<string> => {
+    const directReports = new Set<string>()
+    const children = childrenMapCached.get(employeeId) || []
+    children.forEach(child => {
+      directReports.add(child.id)
+    })
+    return directReports
+  }, [childrenMapCached])
+
+  // Filter employees based on focus selection
+  const filteredEmployees = useMemo(() => {
+    if (!focusedEmployeeId) return employees
+
+    const ancestors = getAncestors(focusedEmployeeId)
+    const directReports = getDirectReports(focusedEmployeeId)
+
+    // Include: focused employee + all ancestors (manager chain) + direct reports only
+    const includedIds = new Set([focusedEmployeeId, ...Array.from(ancestors), ...Array.from(directReports)])
+
+    return employees.filter(emp => includedIds.has(emp.id))
+  }, [employees, focusedEmployeeId, getAncestors, getDirectReports])
+
+  // Search results for dropdown
+  const searchResults = useMemo(() => {
+    if (!searchTerm.trim()) return []
+    const term = searchTerm.toLowerCase()
+    return employees
+      .filter(emp =>
+        emp.name.toLowerCase().includes(term) ||
+        emp.title.toLowerCase().includes(term)
+      )
+      .slice(0, 10) // Limit to 10 results
+  }, [employees, searchTerm])
+
+  // Memoize expensive tree calculations to prevent recalculation on every render
+  const treeData = useMemo(() => buildTree(filteredEmployees), [filteredEmployees, collapsedNodes])
+  const positionedTree = useMemo(() => calculatePositions(treeData), [treeData])
+  const allNodes = useMemo(() => getAllNodes(positionedTree), [positionedTree])
+  const connections = useMemo(() => getConnections(positionedTree), [positionedTree])
+
+  // Memoize total dimensions calculation
+  const { totalWidth, totalHeight } = useMemo(() => ({
+    totalWidth: allNodes.length > 0 ? Math.max(...allNodes.map(n => n.x + 200)) : 800,
+    totalHeight: allNodes.length > 0 ? Math.max(...allNodes.map(n => n.y + 80)) + 100 : 600
+  }), [allNodes])
+
+  // Viewport-based rendering: only render nodes visible in the current viewport
+  const VIEWPORT_BUFFER = 300 // Extra pixels around viewport to render for smooth scrolling
+  const NODE_WIDTH = 200
+  const NODE_HEIGHT = 80
+
+  const visibleNodes = useMemo(() => {
+    // Calculate visible bounds in chart coordinates (accounting for pan and zoom)
+    const viewportLeft = (-translate.x / scale) - VIEWPORT_BUFFER
+    const viewportRight = ((-translate.x + dimensions.width) / scale) + VIEWPORT_BUFFER
+    const viewportTop = (-translate.y / scale) - VIEWPORT_BUFFER
+    const viewportBottom = ((-translate.y + dimensions.height) / scale) + VIEWPORT_BUFFER
+
+    return allNodes.filter(node => {
+      const nodeRight = node.x + NODE_WIDTH
+      const nodeBottom = node.y + NODE_HEIGHT
+
+      // Check if node overlaps with viewport
+      return nodeRight >= viewportLeft &&
+             node.x <= viewportRight &&
+             nodeBottom >= viewportTop &&
+             node.y <= viewportBottom
+    })
+  }, [allNodes, translate.x, translate.y, scale, dimensions.width, dimensions.height])
+
+  // Filter connections to only those where at least one node is visible
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(n => n.id)), [visibleNodes])
+
+  const visibleConnections = useMemo(() => {
+    return connections.filter(conn =>
+      visibleNodeIds.has(conn.from.id) || visibleNodeIds.has(conn.to.id)
+    )
+  }, [connections, visibleNodeIds])
 
   // Handle container resize
   useEffect(() => {
@@ -241,43 +445,21 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
 
   const handleEditSave = () => {
     setEditSaveClicked(true)
-    
-    if (!editingEmployee) {
-      console.warn('No editing employee found')
+
+    if (!editingEmployee || !editFormData.name.trim() || !editFormData.title.trim() || !onNodeEdit) {
       setEditSaveClicked(false)
       return
     }
-    
-    if (!editFormData.name.trim() || !editFormData.title.trim()) {
-      console.warn('Name and title are required')
-      setEditSaveClicked(false)
-      return
-    }
-    
-    if (!onNodeEdit) {
-      console.warn('onNodeEdit callback not provided')
-      alert('Edit callback not provided. Please ensure the parent component passes an onNodeEdit function.')
-      setEditSaveClicked(false)
-      return
-    }
-    
-    console.log('Saving employee edit:', {
-      id: editingEmployee.id,
-      name: editFormData.name.trim(),
-      title: editFormData.title.trim()
-    })
-    
+
     try {
       onNodeEdit(editingEmployee.id, {
         name: editFormData.name.trim(),
         title: editFormData.title.trim()
       })
-      console.log('Edit callback executed successfully')
     } catch (error) {
       console.error('Error calling onNodeEdit:', error)
-      alert('Failed to save changes. Check console for details.')
     }
-    
+
     setEditSaveClicked(false)
     handleEditCancel()
   }
@@ -310,16 +492,11 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
     })
   }
 
-  const collapseAllNodes = () => {
-    const allNodesWithChildren = new Set<string>()
-    employees.forEach(emp => {
-      const hasChildren = employees.some(child => child.managerId === emp.id)
-      if (hasChildren) {
-        allNodesWithChildren.add(emp.id)
-      }
-    })
+  const collapseAllNodes = useCallback(() => {
+    // Use cached childrenMap for O(1) lookup instead of O(n) per employee
+    const allNodesWithChildren = new Set<string>(childrenMapCached.keys())
     setCollapsedNodes(allNodesWithChildren)
-  }
+  }, [childrenMapCached])
 
   const expandAllNodes = () => {
     setCollapsedNodes(new Set())
@@ -331,6 +508,29 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
       collapseAllNodes()
     }
   }, [collapseAll])
+
+  // Auto-collapse for large datasets (>500 employees) to ensure fast initial load
+  const LARGE_DATASET_THRESHOLD = 500
+  const prevEmployeeCount = useRef<number>(0)
+
+  useEffect(() => {
+    // Only auto-collapse when loading a new large dataset (not on every change)
+    const isNewLargeDataset = employees.length > LARGE_DATASET_THRESHOLD &&
+                               prevEmployeeCount.current < LARGE_DATASET_THRESHOLD
+
+    if (isNewLargeDataset) {
+      // Collapse all nodes except root level for better initial performance
+      const nodesWithChildren = new Set<string>()
+      employees.forEach(emp => {
+        if (childrenMapCached.has(emp.id)) {
+          nodesWithChildren.add(emp.id)
+        }
+      })
+      setCollapsedNodes(nodesWithChildren)
+    }
+
+    prevEmployeeCount.current = employees.length
+  }, [employees.length, childrenMapCached])
 
   const handleNodeHover = (nodeId: string | null) => {
     setHoveredNode(nodeId)
@@ -404,7 +604,7 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
   const handleEmployeeDrop = (e: React.DragEvent, targetEmployeeId: string) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
     // Prevent drops during saving
     if (isSaving) {
       setDraggedEmployee(null)
@@ -412,31 +612,35 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
       setIsNodeDragging(false)
       return
     }
-    
+
     const draggedEmployeeId = e.dataTransfer.getData('text/plain')
-    
+
     if (draggedEmployeeId && draggedEmployeeId !== targetEmployeeId) {
-      if (!wouldCreateCircularReference(draggedEmployeeId, targetEmployeeId)) {
-        if (onManagerChange) {
-          onManagerChange(draggedEmployeeId, targetEmployeeId)
-        }
+      if (wouldCreateCircularReference(draggedEmployeeId, targetEmployeeId)) {
+        // Notify parent about circular reference error
+        onCircularReferenceError?.(draggedEmployeeId, targetEmployeeId)
+      } else if (onManagerChange) {
+        onManagerChange(draggedEmployeeId, targetEmployeeId)
       }
     }
-    
+
     setDraggedEmployee(null)
     setDropTarget(null)
     setIsNodeDragging(false)
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      className={`relative overflow-hidden border border-gray-300 rounded-lg bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100 ${className}`}
-      style={{ 
+      className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 ${className}`}
+      style={{
         cursor: isDragging ? 'grabbing' : 'grab',
         outline: 'none'
       }}
     >
+      {/* Subtle grid pattern background */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-50" />
+
       <svg
         ref={svgRef}
         width={dimensions.width}
@@ -447,153 +651,165 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         style={{ outline: 'none' }}
+        className="relative"
       >
         <defs>
           <filter id="modernShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="4" stdDeviation="8" floodColor="rgba(0,0,0,0.15)"/>
-            <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="rgba(0,0,0,0.1)"/>
+            <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="rgba(0,0,0,0.3)"/>
           </filter>
+          <filter id="glowEffect" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          {/* Modern dark theme gradients */}
           <linearGradient id="ceoGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#f0f9ff" />
-            <stop offset="50%" stopColor="#e0f2fe" />
-            <stop offset="100%" stopColor="#bae6fd" />
+            <stop offset="0%" stopColor="#1e3a5f" />
+            <stop offset="100%" stopColor="#0f2744" />
           </linearGradient>
           <linearGradient id="directorGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#fdf4ff" />
-            <stop offset="50%" stopColor="#fae8ff" />
-            <stop offset="100%" stopColor="#e9d5ff" />
+            <stop offset="0%" stopColor="#4c1d95" />
+            <stop offset="100%" stopColor="#2e1065" />
           </linearGradient>
           <linearGradient id="managerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#f0fdf4" />
-            <stop offset="50%" stopColor="#dcfce7" />
-            <stop offset="100%" stopColor="#bbf7d0" />
+            <stop offset="0%" stopColor="#065f46" />
+            <stop offset="100%" stopColor="#064e3b" />
           </linearGradient>
           <linearGradient id="teamLeadGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#fffbeb" />
-            <stop offset="50%" stopColor="#fef3c7" />
-            <stop offset="100%" stopColor="#fde68a" />
+            <stop offset="0%" stopColor="#78350f" />
+            <stop offset="100%" stopColor="#451a03" />
           </linearGradient>
           <linearGradient id="employeeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#fef7f7" />
-            <stop offset="50%" stopColor="#fee2e2" />
-            <stop offset="100%" stopColor="#fecaca" />
+            <stop offset="0%" stopColor="#1e293b" />
+            <stop offset="100%" stopColor="#0f172a" />
           </linearGradient>
           <linearGradient id="hoveredGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#eef2ff" />
-            <stop offset="50%" stopColor="#e0e7ff" />
-            <stop offset="100%" stopColor="#c7d2fe" />
+            <stop offset="0%" stopColor="#312e81" />
+            <stop offset="100%" stopColor="#1e1b4b" />
           </linearGradient>
           <linearGradient id="draggedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#fefce8" />
-            <stop offset="50%" stopColor="#fef3c7" />
-            <stop offset="100%" stopColor="#fde047" />
+            <stop offset="0%" stopColor="#854d0e" />
+            <stop offset="100%" stopColor="#713f12" />
           </linearGradient>
           <linearGradient id="dropTargetGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#f0fdf4" />
-            <stop offset="50%" stopColor="#dcfce7" />
-            <stop offset="100%" stopColor="#86efac" />
+            <stop offset="0%" stopColor="#166534" />
+            <stop offset="100%" stopColor="#14532d" />
           </linearGradient>
           <linearGradient id="invalidDropGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#fef2f2" />
-            <stop offset="50%" stopColor="#fee2e2" />
-            <stop offset="100%" stopColor="#f87171" />
+            <stop offset="0%" stopColor="#991b1b" />
+            <stop offset="100%" stopColor="#7f1d1d" />
+          </linearGradient>
+          <linearGradient id="focusedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#86198f" />
+            <stop offset="100%" stopColor="#701a75" />
           </linearGradient>
         </defs>
         
         <g transform={`translate(${translate.x}, ${translate.y}) scale(${scale})`}>
-          {/* Render connections */}
-          {connections.map((conn, index) => {
+          {/* Render connections (only visible ones for performance) */}
+          {visibleConnections.map((conn, index) => {
             const fromX = conn.from.x + 100
             const fromY = conn.from.y + 80
             const toX = conn.to.x + 100
             const toY = conn.to.y
-            const midY = fromY + (toY - fromY) / 2
 
-            // Color connections based on the parent's level
-            let connectionColor = "#f87171"
-            if (conn.from.level === 0) connectionColor = "#0284c7"
-            else if (conn.from.level === 1) connectionColor = "#9333ea"
-            else if (conn.from.level === 2) connectionColor = "#16a34a"
-            else if (conn.from.level === 3) connectionColor = "#d97706"
+            // Modern connection colors matching node accents
+            let connectionColor = "#475569"
+            if (conn.from.level === 0) connectionColor = "#3b82f6"
+            else if (conn.from.level === 1) connectionColor = "#a855f7"
+            else if (conn.from.level === 2) connectionColor = "#22c55e"
+            else if (conn.from.level === 3) connectionColor = "#f59e0b"
+
+            const horizontalY = fromY + 20
 
             return (
               <g key={index}>
                 <path
-                  d={`M ${fromX} ${fromY} L ${fromX} ${midY} L ${toX} ${midY} L ${toX} ${toY}`}
+                  d={`M ${fromX} ${fromY} L ${fromX} ${horizontalY} L ${toX} ${horizontalY} L ${toX} ${toY}`}
                   stroke={connectionColor}
-                  strokeWidth="2"
+                  strokeWidth="1.5"
                   fill="none"
-                  opacity="0.3"
+                  opacity="0.4"
+                  strokeLinecap="round"
                 />
-                {/* Connection dots */}
-                <circle cx={fromX} cy={fromY} r="1.5" fill={connectionColor} opacity="0.4" />
-                <circle cx={toX} cy={toY} r="1.5" fill={connectionColor} opacity="0.4" />
               </g>
             )
           })}
           
-          {/* Render nodes */}
-          {allNodes.map((node) => {
+          {/* Render nodes (only visible ones for performance) */}
+          {visibleNodes.map((node) => {
             const isBeingDragged = draggedEmployee === node.id
             const isDropTarget = dropTarget === node.id
-            const isInvalidDropTarget = draggedEmployee && draggedEmployee !== node.id && 
+            const isInvalidDropTarget = draggedEmployee && draggedEmployee !== node.id &&
                                       wouldCreateCircularReference(draggedEmployee, node.id)
             const isHovered = hoveredNode === node.id
-            const isTopLevel = node.level === 0
-            
-            // Determine gradient based on hierarchy level and role
+            const isFocused = focusedEmployeeId === node.id
+
+            // Modern dark theme - light text on dark backgrounds
             let fillGradient = "url(#employeeGradient)"
-            let strokeColor = "#f87171"
-            let strokeWidth = 0.5
-            let textColor = "#991b1b"
-            let titleColor = "#dc2626"
-            
-            // Color coding by level
+            let strokeColor = "#475569"
+            let strokeWidth = 1
+            let textColor = "#f1f5f9"
+            let titleColor = "#94a3b8"
+
+            // Color coding by level with accent colors
             if (node.level === 0) {
               fillGradient = "url(#ceoGradient)"
-              strokeColor = "#0284c7"
-              strokeWidth = 1
-              textColor = "#0c4a6e"
-              titleColor = "#0369a1"
+              strokeColor = "#3b82f6"
+              textColor = "#bfdbfe"
+              titleColor = "#93c5fd"
             } else if (node.level === 1) {
               fillGradient = "url(#directorGradient)"
-              strokeColor = "#9333ea"
-              strokeWidth = 1
-              textColor = "#581c87"
-              titleColor = "#7c3aed"
+              strokeColor = "#a855f7"
+              textColor = "#e9d5ff"
+              titleColor = "#c4b5fd"
             } else if (node.level === 2) {
               fillGradient = "url(#managerGradient)"
-              strokeColor = "#16a34a"
-              strokeWidth = 1
-              textColor = "#14532d"
-              titleColor = "#15803d"
+              strokeColor = "#22c55e"
+              textColor = "#bbf7d0"
+              titleColor = "#86efac"
             } else if (node.level === 3) {
               fillGradient = "url(#teamLeadGradient)"
-              strokeColor = "#d97706"
-              strokeWidth = 1
-              textColor = "#92400e"
-              titleColor = "#b45309"
+              strokeColor = "#f59e0b"
+              textColor = "#fef3c7"
+              titleColor = "#fcd34d"
             }
-            
+
             // Override with state-based colors
             if (isBeingDragged) {
               fillGradient = "url(#draggedGradient)"
               strokeColor = "#eab308"
               strokeWidth = 2
+              textColor = "#fef9c3"
+              titleColor = "#fde047"
             } else if (isDropTarget) {
               fillGradient = "url(#dropTargetGradient)"
-              strokeColor = "#16a34a"
+              strokeColor = "#22c55e"
               strokeWidth = 2
+              textColor = "#dcfce7"
+              titleColor = "#86efac"
             } else if (isInvalidDropTarget) {
               fillGradient = "url(#invalidDropGradient)"
-              strokeColor = "#dc2626"
+              strokeColor = "#ef4444"
               strokeWidth = 2
+              textColor = "#fecaca"
+              titleColor = "#f87171"
+            } else if (isFocused) {
+              fillGradient = "url(#focusedGradient)"
+              strokeColor = "#d946ef"
+              strokeWidth = 2
+              textColor = "#f5d0fe"
+              titleColor = "#e879f9"
             } else if (isHovered) {
               fillGradient = "url(#hoveredGradient)"
-              strokeColor = "#4f46e5"
+              strokeColor = "#6366f1"
               strokeWidth = 2
+              textColor = "#e0e7ff"
+              titleColor = "#a5b4fc"
             }
-            
+
             return (
               <g key={node.id}>
                 <rect
@@ -601,15 +817,15 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
                   y={node.y}
                   width={200}
                   height={80}
-                  rx={12}
+                  rx={16}
                   fill={fillGradient}
-                  stroke={isHovered || isBeingDragged || isDropTarget || isInvalidDropTarget ? strokeColor : "none"}
-                  strokeWidth={isHovered || isBeingDragged || isDropTarget || isInvalidDropTarget ? strokeWidth : 0}
+                  stroke={strokeColor}
+                  strokeWidth={strokeWidth}
                   filter="url(#modernShadow)"
-                  style={{ 
+                  style={{
                     cursor: isBeingDragged ? 'grabbing' : 'grab',
-                    opacity: isBeingDragged ? 0.8 : 1,
-                    transition: 'all 0.2s ease',
+                    opacity: isBeingDragged ? 0.9 : 1,
+                    transition: 'opacity 0.2s ease',
                     outline: 'none'
                   }}
                   onClick={() => handleNodeClick(node.id)}
@@ -642,25 +858,27 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
                   {node.name}
                 </text>
                 
-                {/* Title field */}
-                <text
-                  x={node.x + 100}
-                  y={node.y + 50}
-                  textAnchor="middle"
-                  className="text-xs"
-                  style={{ 
-                    pointerEvents: 'all', 
-                    fill: titleColor,
-                    cursor: 'pointer',
-                    outline: 'none'
-                  }}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation()
-                    handleNodeDoubleClick(node.id)
-                  }}
-                >
-                  {node.title}
-                </text>
+                {/* Title field - hide if Unknown Title or empty */}
+                {node.title && node.title !== 'Unknown Title' && (
+                  <text
+                    x={node.x + 100}
+                    y={node.y + 50}
+                    textAnchor="middle"
+                    className="text-xs"
+                    style={{
+                      pointerEvents: 'all',
+                      fill: titleColor,
+                      cursor: 'pointer',
+                      outline: 'none'
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation()
+                      handleNodeDoubleClick(node.id)
+                    }}
+                  >
+                    {node.title}
+                  </text>
+                )}
                 
                 {/* Edit hint on hover */}
                 {isHovered && !isBeingDragged && (
@@ -668,8 +886,7 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
                     x={node.x + 100}
                     y={node.y + 70}
                     textAnchor="middle"
-                    className="text-xs fill-gray-400"
-                    style={{ pointerEvents: 'none' }}
+                    style={{ pointerEvents: 'none', fill: '#64748b', fontSize: '10px' }}
                   >
                     Double-click to edit
                   </text>
@@ -699,7 +916,7 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
                 
                 {/* Collapse/Expand button */}
                 {nodeHasChildren(node.id) && (
-                  <g 
+                  <g
                     onClick={(e) => {
                       e.stopPropagation()
                       toggleCollapse(node.id)
@@ -709,41 +926,31 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
                     <circle
                       cx={node.x + 100}
                       cy={node.y + 80}
-                      r={12}
-                      fill="white"
+                      r={10}
+                      fill={fillGradient}
                       stroke={strokeColor}
-                      strokeWidth="1"
+                      strokeWidth="1.5"
                       filter="url(#modernShadow)"
                     />
                     {node.isCollapsed ? (
-                      // Plus icon for collapsed
-                      <g>
-                        <line
-                          x1={node.x + 94}
-                          y1={node.y + 80}
-                          x2={node.x + 106}
-                          y2={node.y + 80}
-                          stroke={strokeColor}
-                          strokeWidth="1.5"
-                        />
-                        <line
-                          x1={node.x + 100}
-                          y1={node.y + 74}
-                          x2={node.x + 100}
-                          y2={node.y + 86}
-                          stroke={strokeColor}
-                          strokeWidth="1.5"
-                        />
-                      </g>
-                    ) : (
-                      // Minus icon for expanded
-                      <line
-                        x1={node.x + 94}
-                        y1={node.y + 80}
-                        x2={node.x + 106}
-                        y2={node.y + 80}
+                      // Chevron down for collapsed (click to expand)
+                      <polyline
+                        points={`${node.x + 96},${node.y + 78} ${node.x + 100},${node.y + 83} ${node.x + 104},${node.y + 78}`}
                         stroke={strokeColor}
                         strokeWidth="1.5"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    ) : (
+                      // Chevron up for expanded (click to collapse)
+                      <polyline
+                        points={`${node.x + 96},${node.y + 82} ${node.x + 100},${node.y + 77} ${node.x + 104},${node.y + 82}`}
+                        stroke={strokeColor}
+                        strokeWidth="1.5"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       />
                     )}
                   </g>
@@ -755,8 +962,7 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
                     x={node.x + 100}
                     y={node.y + 100}
                     textAnchor="middle"
-                    className="text-xs fill-gray-500"
-                    style={{ pointerEvents: 'none' }}
+                    style={{ pointerEvents: 'none', fill: '#64748b', fontSize: '11px' }}
                   >
                     {(() => {
                       const childCount = employees.filter(emp => emp.managerId === node.id).length
@@ -868,68 +1074,113 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
         </div>
       )}
 
-      {/* Error message */}
-      {saveError && (
-        <div className="absolute top-4 left-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md z-40">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <strong className="font-bold">Save Failed: </strong>
-              <span className="block sm:inline">{saveError}</span>
-            </div>
-            <div className="ml-4 flex items-center space-x-2">
-              {onRetry && (
+      {/* Search and focus filter */}
+      <div className="absolute top-2 left-2 z-20" data-chart-overlay>
+        <div className="relative">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setShowSearchDropdown(true)
+            }}
+            onFocus={() => setShowSearchDropdown(true)}
+            onBlur={() => {
+              // Delay hiding dropdown to allow click on results
+              setTimeout(() => setShowSearchDropdown(false), 200)
+            }}
+            placeholder="Search employees..."
+            className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-lg text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          />
+
+          {/* Search results dropdown */}
+          {showSearchDropdown && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+              {searchResults.map((emp) => (
                 <button
-                  onClick={onRetry}
-                  className="text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                  key={emp.id}
+                  onClick={() => {
+                    setFocusedEmployeeId(emp.id)
+                    setSearchTerm('')
+                    setShowSearchDropdown(false)
+                    // Expand collapsed nodes in the path to this employee
+                    setCollapsedNodes(new Set())
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
                 >
-                  Retry
+                  <div className="font-medium text-gray-900 text-sm">{emp.name}</div>
+                  <div className="text-xs text-gray-500">{emp.title}</div>
                 </button>
-              )}
-              <button
-                onClick={() => onSaveStatusChange?.(false, null)}
-                className="text-red-500 hover:text-red-700 text-lg leading-none"
-              >
-                ×
-              </button>
+              ))}
             </div>
-          </div>
+          )}
         </div>
-      )}
+
+        {/* Active focus indicator */}
+        {focusedEmployeeId && (
+          <div className="mt-2 bg-blue-100 border border-blue-300 rounded-lg px-3 py-2 shadow-lg flex items-center justify-between">
+            <div>
+              <div className="text-xs text-blue-600 font-medium">Focused on:</div>
+              <div className="text-sm text-blue-900 font-semibold">
+                {employeeMap.get(focusedEmployeeId)?.name}
+              </div>
+              <div className="text-xs text-blue-700">
+                Showing {filteredEmployees.length} of {employees.length} employees
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setFocusedEmployeeId(null)
+                setSearchTerm('')
+              }}
+              className="ml-2 px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Chart and zoom controls */}
-      <div className="absolute top-2 right-2 flex flex-col space-y-2 z-10">
+      <div className="absolute top-3 right-3 flex flex-col gap-1 z-10 rounded-xl bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 p-1.5 shadow-2xl" data-chart-overlay>
+        {/* Collapse/Expand group */}
         <button
           onClick={collapseAllNodes}
           disabled={isSaving}
-          className="w-10 h-8 bg-purple-600 text-white border border-purple-700 rounded flex items-center justify-center hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-xs font-bold"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Collapse All"
         >
-          ⏷
+          <ChevronDown className="w-4 h-4" />
         </button>
         <button
           onClick={expandAllNodes}
           disabled={isSaving}
-          className="w-10 h-8 bg-green-600 text-white border border-green-700 rounded flex items-center justify-center hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-xs font-bold"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Expand All"
         >
-          ⏵
+          <ChevronUp className="w-4 h-4" />
         </button>
-        <div className="w-full h-px bg-gray-400"></div>
+
+        {/* Divider */}
+        <div className="mx-1.5 h-px bg-slate-700/60" />
+
+        {/* Zoom group */}
         <button
           onClick={() => setScale(Math.min(scale * 1.2, 3))}
           disabled={isSaving}
-          className="w-10 h-8 bg-blue-600 text-white border border-blue-700 rounded flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Zoom In"
         >
-          +
+          <ZoomIn className="w-4 h-4" />
         </button>
         <button
           onClick={() => setScale(Math.max(scale * 0.8, 0.1))}
           disabled={isSaving}
-          className="w-10 h-8 bg-blue-600 text-white border border-blue-700 rounded flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Zoom Out"
         >
-          −
+          <ZoomOut className="w-4 h-4" />
         </button>
         <button
           onClick={() => {
@@ -937,10 +1188,10 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
             setTranslate({ x: 0, y: 0 })
           }}
           disabled={isSaving}
-          className="w-10 h-8 bg-blue-600 text-white border border-blue-700 rounded flex items-center justify-center hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Reset View"
         >
-          ⌂
+          <Home className="w-4 h-4" />
         </button>
       </div>
     </div>

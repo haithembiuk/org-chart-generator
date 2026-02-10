@@ -73,9 +73,14 @@ const TITLE_PATTERNS = [
   /^job.*title$/i,
   /^position$/i,
   /^role$/i,
+  /^job.*role$/i,
+  /^employee.*role$/i,
   /^designation$/i,
   /^rank$/i,
-  /^level$/i
+  /^level$/i,
+  /^function$/i,
+  /^department$/i,
+  /role/i,  // Match any column containing "role"
 ] as const;
 
 export class AIParserService {
