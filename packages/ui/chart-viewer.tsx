@@ -632,14 +632,19 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-border-default bg-surface ${className}`}
       style={{
         cursor: isDragging ? 'grabbing' : 'grab',
         outline: 'none'
       }}
     >
       {/* Subtle grid pattern background */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-50" />
+      <div
+        className="absolute inset-0 bg-[size:3rem_3rem] opacity-50"
+        style={{
+          backgroundImage: `linear-gradient(to right, var(--color-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--color-grid) 1px, transparent 1px)`
+        }}
+      />
 
       <svg
         ref={svgRef}
@@ -982,16 +987,16 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
           className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={handleEditCancel}
         >
-          <div 
-            className="bg-white rounded-xl shadow-2xl p-6 w-96 max-w-md mx-4 text-gray-900"
+          <div
+            className="bg-base rounded-xl shadow-2xl p-6 w-96 max-w-md mx-4 text-text-primary border border-border-default"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={handleModalKeyDown}
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">Edit Employee</h3>
+              <h3 className="text-lg font-semibold text-text-primary">Edit Employee</h3>
               <button
                 onClick={handleEditCancel}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                className="text-text-muted hover:text-text-primary text-xl leading-none"
               >
                 ×
               </button>
@@ -999,42 +1004,42 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-secondary mb-2">
                   Name
                 </label>
                 <input
                   type="text"
                   value={editFormData.name}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900 bg-white placeholder-gray-500"
+                  className="w-full px-3 py-2 border border-border-default rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-text-primary bg-surface placeholder-text-muted"
                   placeholder="Enter employee name"
                   autoFocus
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-secondary mb-2">
                   Title
                 </label>
                 <input
                   type="text"
                   value={editFormData.title}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900 bg-white placeholder-gray-500"
+                  className="w-full px-3 py-2 border border-border-default rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-text-primary bg-surface placeholder-text-muted"
                   placeholder="Enter job title"
                 />
               </div>
               
               {editingEmployee.customFields && Object.keys(editingEmployee.customFields).length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
                     Additional Information
                   </label>
-                  <div className="bg-gray-50 rounded-lg p-3 space-y-1">
+                  <div className="bg-elevated rounded-lg p-3 space-y-1">
                     {Object.entries(editingEmployee.customFields).map(([key, value]) => (
                       <div key={key} className="text-sm">
-                        <span className="font-medium text-gray-600">{key}:</span>{' '}
-                        <span className="text-gray-800">{String(value)}</span>
+                        <span className="font-medium text-text-secondary">{key}:</span>{' '}
+                        <span className="text-text-primary">{String(value)}</span>
                       </div>
                     ))}
                   </div>
@@ -1045,14 +1050,14 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
             <div className="flex justify-end space-x-3 mt-6">
               <button
                 onClick={handleEditCancel}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-text-secondary bg-elevated hover:bg-overlay rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleEditSave}
                 disabled={!editFormData.name.trim() || !editFormData.title.trim() || editSaveClicked}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-elevated disabled:text-text-muted disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
               >
                 {editSaveClicked && (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -1066,10 +1071,10 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
       
       {/* Loading overlay */}
       {isSaving && (
-        <div className="absolute inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-lg shadow-lg flex items-center space-x-3">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="text-gray-700 font-medium">Saving changes...</span>
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-base border border-border-default p-4 rounded-lg shadow-lg flex items-center space-x-3">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+            <span className="text-text-primary font-medium">Saving changes...</span>
           </div>
         </div>
       )}
@@ -1091,12 +1096,12 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
               setTimeout(() => setShowSearchDropdown(false), 200)
             }}
             placeholder="Search employees..."
-            className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-lg text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            className="w-64 px-3 py-2 bg-base border border-border-default rounded-lg shadow-lg text-text-primary text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
           />
 
           {/* Search results dropdown */}
           {showSearchDropdown && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+            <div className="absolute top-full left-0 right-0 mt-1 bg-base border border-border-default rounded-lg shadow-lg max-h-64 overflow-y-auto">
               {searchResults.map((emp) => (
                 <button
                   key={emp.id}
@@ -1107,10 +1112,10 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
                     // Expand collapsed nodes in the path to this employee
                     setCollapsedNodes(new Set())
                   }}
-                  className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                  className="w-full px-3 py-2 text-left hover:bg-elevated border-b border-border-default last:border-b-0"
                 >
-                  <div className="font-medium text-gray-900 text-sm">{emp.name}</div>
-                  <div className="text-xs text-gray-500">{emp.title}</div>
+                  <div className="font-medium text-text-primary text-sm">{emp.name}</div>
+                  <div className="text-xs text-text-muted">{emp.title}</div>
                 </button>
               ))}
             </div>
@@ -1119,13 +1124,13 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
 
         {/* Active focus indicator */}
         {focusedEmployeeId && (
-          <div className="mt-2 bg-blue-100 border border-blue-300 rounded-lg px-3 py-2 shadow-lg flex items-center justify-between">
+          <div className="mt-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-3 py-2 shadow-lg flex items-center justify-between">
             <div>
-              <div className="text-xs text-blue-600 font-medium">Focused on:</div>
-              <div className="text-sm text-blue-900 font-semibold">
+              <div className="text-xs text-indigo-500 dark:text-indigo-400 font-medium">Focused on:</div>
+              <div className="text-sm text-text-primary font-semibold">
                 {employeeMap.get(focusedEmployeeId)?.name}
               </div>
-              <div className="text-xs text-blue-700">
+              <div className="text-xs text-text-secondary">
                 Showing {filteredEmployees.length} of {employees.length} employees
               </div>
             </div>
@@ -1134,7 +1139,7 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
                 setFocusedEmployeeId(null)
                 setSearchTerm('')
               }}
-              className="ml-2 px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+              className="ml-2 px-2 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
             >
               Clear
             </button>
@@ -1143,12 +1148,12 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
       </div>
 
       {/* Chart and zoom controls */}
-      <div className="absolute top-3 right-3 flex flex-col gap-1 z-10 rounded-xl bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 p-1.5 shadow-2xl" data-chart-overlay>
+      <div className="absolute top-3 right-3 flex flex-col gap-1 z-10 rounded-xl bg-surface/80 backdrop-blur-xl border border-border-default p-1.5 shadow-2xl" data-chart-overlay>
         {/* Collapse/Expand group */}
         <button
           onClick={collapseAllNodes}
           disabled={isSaving}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-elevated active:bg-overlay disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Collapse All"
         >
           <ChevronDown className="w-4 h-4" />
@@ -1156,20 +1161,20 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
         <button
           onClick={expandAllNodes}
           disabled={isSaving}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-elevated active:bg-overlay disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Expand All"
         >
           <ChevronUp className="w-4 h-4" />
         </button>
 
         {/* Divider */}
-        <div className="mx-1.5 h-px bg-slate-700/60" />
+        <div className="mx-1.5 h-px bg-border-default" />
 
         {/* Zoom group */}
         <button
           onClick={() => setScale(Math.min(scale * 1.2, 3))}
           disabled={isSaving}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-elevated active:bg-overlay disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
@@ -1177,7 +1182,7 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
         <button
           onClick={() => setScale(Math.max(scale * 0.8, 0.1))}
           disabled={isSaving}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-elevated active:bg-overlay disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
@@ -1188,7 +1193,7 @@ export const ChartViewer: React.FC<ChartViewerProps> = ({
             setTranslate({ x: 0, y: 0 })
           }}
           disabled={isSaving}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/60 active:bg-slate-600/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-elevated active:bg-overlay disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Reset View"
         >
           <Home className="w-4 h-4" />
@@ -1208,7 +1213,7 @@ export const ChartTooltip: React.FC<ChartTooltipProps> = ({ employee, position }
 
   return (
     <div
-      className="absolute z-10 bg-gray-900 text-white p-3 rounded-lg shadow-lg max-w-xs"
+      className="absolute z-10 bg-elevated text-text-primary p-3 rounded-lg shadow-lg max-w-xs border border-border-default"
       style={{
         left: position.x + 10,
         top: position.y - 10,
@@ -1216,12 +1221,12 @@ export const ChartTooltip: React.FC<ChartTooltipProps> = ({ employee, position }
       }}
     >
       <h3 className="font-semibold text-sm">{employee.name}</h3>
-      <p className="text-xs text-gray-300">{employee.title}</p>
+      <p className="text-xs text-text-secondary">{employee.title}</p>
       {employee.customFields && Object.keys(employee.customFields).length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-700">
+        <div className="mt-2 pt-2 border-t border-border-default">
           {Object.entries(employee.customFields).map(([key, value]) => (
             <div key={key} className="text-xs">
-              <span className="text-gray-400">{key}:</span> {String(value)}
+              <span className="text-text-muted">{key}:</span> {String(value)}
             </div>
           ))}
         </div>

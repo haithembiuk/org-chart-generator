@@ -54,17 +54,17 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-700/30">
-        <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
+      <div className="bg-surface/95 backdrop-blur-md rounded-xl shadow-2xl max-w-md w-full mx-4 border border-border-default">
+        <div className="flex items-center justify-between p-6 border-b border-border-default">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg shadow-sm">
               <UserPlus className="w-5 h-5 text-white" />
             </div>
-            <h2 className="text-xl font-semibold bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent tracking-tight">Add New Employee</h2>
+            <h2 className="text-xl font-semibold text-text-primary tracking-tight">Add New Employee</h2>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 rounded-lg transition-all duration-200"
+            className="p-2 text-text-muted hover:text-text-primary hover:bg-elevated rounded-lg transition-all duration-200"
             disabled={isLoading}
           >
             <X className="w-5 h-5" />
@@ -74,7 +74,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6">
           <div className="space-y-4">
             <div>
-              <label htmlFor="employee-name" className="block text-sm font-semibold text-gray-200 mb-2 tracking-tight">
+              <label htmlFor="employee-name" className="block text-sm font-semibold text-text-primary mb-2 tracking-tight">
                 Name *
               </label>
               <input
@@ -82,7 +82,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-200 backdrop-blur-sm font-medium text-gray-100 placeholder-gray-400"
+                className="w-full px-4 py-3 bg-elevated border border-border-default rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all duration-200 backdrop-blur-sm font-medium text-text-primary placeholder-text-muted"
                 placeholder="Enter employee name"
                 required
                 disabled={isLoading}
@@ -90,7 +90,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
             </div>
 
             <div>
-              <label htmlFor="employee-title" className="block text-sm font-semibold text-gray-200 mb-2 tracking-tight">
+              <label htmlFor="employee-title" className="block text-sm font-semibold text-text-primary mb-2 tracking-tight">
                 Title *
               </label>
               <input
@@ -98,7 +98,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-200 backdrop-blur-sm font-medium text-gray-100 placeholder-gray-400"
+                className="w-full px-4 py-3 bg-elevated border border-border-default rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all duration-200 backdrop-blur-sm font-medium text-text-primary placeholder-text-muted"
                 placeholder="Enter job title"
                 required
                 disabled={isLoading}
@@ -106,7 +106,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
             </div>
 
             <div>
-              <label htmlFor="employee-manager" className="block text-sm font-semibold text-gray-200 mb-2 tracking-tight">
+              <label htmlFor="employee-manager" className="block text-sm font-semibold text-text-primary mb-2 tracking-tight">
                 Manager (Optional)
               </label>
               <div className="relative">
@@ -114,7 +114,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
                   id="employee-manager"
                   value={managerId || ''}
                   onChange={(e) => setManagerId(e.target.value || null)}
-                  className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-200 backdrop-blur-sm font-medium appearance-none text-gray-100"
+                  className="w-full px-4 py-3 bg-elevated border border-border-default rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all duration-200 backdrop-blur-sm font-medium appearance-none text-text-primary"
                   disabled={isLoading}
                 >
                   <option value="">No manager (Top level)</option>
@@ -124,23 +124,23 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-gray-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-text-muted pointer-events-none" />
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-700/50">
+          <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-border-default">
             <button
               type="button"
               onClick={handleClose}
-              className="px-6 py-3 text-sm font-semibold text-gray-300 bg-gray-700/50 border border-gray-600 rounded-lg hover:bg-gray-600/50 focus:outline-none focus:ring-2 focus:ring-gray-500/30 disabled:opacity-50 transition-all duration-200 backdrop-blur-sm shadow-sm"
+              className="px-6 py-3 text-sm font-semibold text-text-secondary bg-elevated border border-border-default rounded-lg hover:bg-overlay focus:outline-none focus:ring-2 focus:ring-slate-500/30 disabled:opacity-50 transition-all duration-200 backdrop-blur-sm shadow-sm"
               disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 border border-blue-600 rounded-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl backdrop-blur-sm"
+              className="px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 border border-indigo-600 rounded-lg hover:from-indigo-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl backdrop-blur-sm"
               disabled={isLoading || !name.trim() || !title.trim()}
             >
               {isLoading ? (

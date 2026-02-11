@@ -323,7 +323,7 @@ function HomeContent() {
   const isButtonDisabled = uploadState === 'uploading' || uploadState === 'processing' || isLoading
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-base">
       <Header />
 
       <main className="mx-auto max-w-screen-2xl px-2 py-6">
@@ -331,7 +331,7 @@ function HomeContent() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             {chartData && (
-              <div className="flex items-center gap-2 text-sm text-slate-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+              <div className="flex items-center gap-2 text-sm text-text-secondary bg-surface px-3 py-1.5 rounded-lg border border-border-default">
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>{chartData.statistics.totalEmployees} employees</span>
               </div>
@@ -385,10 +385,10 @@ function HomeContent() {
         <div className="relative">
           {/* Export loading overlay */}
           {isExporting && (
-            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-2xl">
-              <div className="bg-slate-900 border border-slate-800 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3">
+            <div className="absolute inset-0 bg-base/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-2xl">
+              <div className="bg-surface border border-border-default px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3">
                 <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
-                <span className="text-slate-200 font-medium">Generating chart image...</span>
+                <span className="text-text-primary font-medium">Generating chart image...</span>
               </div>
             </div>
           )}
@@ -422,38 +422,38 @@ function HomeContent() {
 
         {/* Chart Statistics */}
         {chartData && (
-          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+          <div className="mt-6 rounded-2xl border border-border-default bg-surface/50 p-5">
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-4 h-4 text-indigo-400" />
-              <h3 className="text-sm font-semibold text-white">Statistics</h3>
+              <h3 className="text-sm font-semibold text-text-primary">Statistics</h3>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-4">
-                <div className="text-2xl font-bold text-white mb-1">{chartData.statistics.totalEmployees}</div>
-                <div className="text-xs text-slate-400 font-medium">Total Employees</div>
+              <div className="rounded-xl bg-elevated/50 border border-border-default p-4">
+                <div className="text-2xl font-bold text-text-primary mb-1">{chartData.statistics.totalEmployees}</div>
+                <div className="text-xs text-text-secondary font-medium">Total Employees</div>
               </div>
-              <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-4">
+              <div className="rounded-xl bg-elevated/50 border border-border-default p-4">
                 <div className="text-2xl font-bold text-emerald-400 mb-1">{chartData.statistics.rootEmployees}</div>
-                <div className="text-xs text-slate-400 font-medium">Root Employees</div>
+                <div className="text-xs text-text-secondary font-medium">Root Employees</div>
               </div>
-              <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-4">
+              <div className="rounded-xl bg-elevated/50 border border-border-default p-4">
                 <div className="text-2xl font-bold text-amber-400 mb-1">{chartData.statistics.orphanedEmployees}</div>
-                <div className="text-xs text-slate-400 font-medium">Orphaned</div>
+                <div className="text-xs text-text-secondary font-medium">Orphaned</div>
               </div>
-              <div className="rounded-xl bg-slate-800/50 border border-slate-700/50 p-4">
+              <div className="rounded-xl bg-elevated/50 border border-border-default p-4">
                 <div className="text-2xl font-bold text-rose-400 mb-1">{chartData.statistics.totalErrors}</div>
-                <div className="text-xs text-slate-400 font-medium">Errors</div>
+                <div className="text-xs text-text-secondary font-medium">Errors</div>
               </div>
             </div>
             {chartData.validation.issues.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-800">
+              <div className="mt-4 pt-4 border-t border-border-default">
                 <div className="flex items-center gap-2 mb-3">
                   <AlertCircle className="w-4 h-4 text-rose-400" />
                   <h4 className="text-sm font-medium text-rose-400">Validation Issues</h4>
                 </div>
                 <ul className="space-y-2">
                   {chartData.validation.issues.map((issue, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm text-slate-300">
+                    <li key={index} className="flex items-start gap-2 text-sm text-text-secondary">
                       <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-rose-400 flex-shrink-0" />
                       <span>{issue}</span>
                     </li>

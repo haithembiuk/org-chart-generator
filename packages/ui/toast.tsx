@@ -85,7 +85,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onRemove }) => {
       </span>
       <button
         onClick={handleRemove}
-        className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-white/10"
+        className="text-text-muted hover:text-text-primary transition-colors p-1 rounded hover:bg-white/10"
         aria-label="Dismiss"
       >
         <X className="w-4 h-4" />
