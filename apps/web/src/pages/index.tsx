@@ -19,7 +19,6 @@ function HomeContent() {
   const [lastFailedOperation, setLastFailedOperation] = useState<{employeeId: string, newManagerId: string} | null>(null)
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
-  const uploadFile = trpc.uploadFile.useMutation()
   const updateManager = trpc.organization.updateManager.useMutation()
   const createEmployee = trpc.organization.createEmployee.useMutation()
   const { chartData, employees, isLoading, error, parseFile, clear } = useChartData()
@@ -61,16 +60,6 @@ function HomeContent() {
     return { isValid: true }
   }
 
-  const fileToBase64 = async (file: File): Promise<string> => {
-    const buffer = await file.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i])
-    }
-    return btoa(binary)
-  }
-
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -85,13 +74,22 @@ function HomeContent() {
     setUploadState('uploading')
 
     try {
-      const fileContent = await fileToBase64(file)
+      // Use FormData + fetch so the browser handles file reading natively,
+      // avoiding NotReadableError from JavaScript file reading APIs
+      const formData = new FormData()
+      formData.append('file', file)
 
-      const result = await uploadFile.mutateAsync({
-        fileName: file.name,
-        fileType: file.type,
-        fileContent
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
       })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.error || `Upload failed (${response.status})`)
+      }
+
+      const result = await response.json()
 
       if (result.success) {
         setUploadState('processing')
@@ -105,10 +103,7 @@ function HomeContent() {
     } catch (err) {
       console.error('Upload error:', err)
       setUploadState('error')
-      const message = err instanceof Error && err.message.includes('could not be read')
-        ? 'Could not read the file. Please make sure it is not open in another application and is available locally (not cloud-only).'
-        : 'Failed to upload file. Please try again.'
-      showToast('error', message)
+      showToast('error', err instanceof Error ? err.message : 'Failed to upload file. Please try again.')
 
       // Reset state after a delay
       setTimeout(() => setUploadState('idle'), 3000)
