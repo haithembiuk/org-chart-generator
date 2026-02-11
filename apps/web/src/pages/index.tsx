@@ -61,20 +61,14 @@ function HomeContent() {
     return { isValid: true }
   }
 
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const result = reader.result as string
-        const base64 = result.split(',')[1]
-        resolve(base64)
-      }
-      reader.onerror = () => {
-        const error = reader.error
-        reject(new Error(`Failed to read file: ${error?.message || error?.name || 'Unknown FileReader error'}`))
-      }
-      reader.readAsDataURL(file)
-    })
+  const fileToBase64 = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    return btoa(binary)
   }
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,7 +105,10 @@ function HomeContent() {
     } catch (err) {
       console.error('Upload error:', err)
       setUploadState('error')
-      showToast('error', 'Failed to upload file. Please try again.')
+      const message = err instanceof Error && err.message.includes('could not be read')
+        ? 'Could not read the file. Please make sure it is not open in another application and is available locally (not cloud-only).'
+        : 'Failed to upload file. Please try again.'
+      showToast('error', message)
 
       // Reset state after a delay
       setTimeout(() => setUploadState('idle'), 3000)
