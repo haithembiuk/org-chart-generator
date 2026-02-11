@@ -1,6 +1,5 @@
 import { initTRPC } from '@trpc/server'
 import { z } from 'zod'
-import { put } from '@vercel/blob'
 import { AIParserService } from '../services/ai-parser'
 import { databaseService } from '../services/database'
 import { organizationRouter } from '../routers/organization'
@@ -22,69 +21,6 @@ export const appRouter = router({
       }
     }),
   
-  uploadFile: protectedProcedure
-    .input(z.object({ 
-      fileName: z.string().min(1).max(255), 
-      fileType: z.string(),
-      fileContent: z.string()
-    }))
-    .mutation(async ({ input }) => {
-      const { fileName, fileType, fileContent } = input
-      
-      // Validate file type
-      const validTypes = ['text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
-      if (!validTypes.includes(fileType)) {
-        throw new Error('Invalid file type. Only CSV and XLSX files are supported.')
-      }
-      
-      // Convert base64 content to buffer
-      const buffer = Buffer.from(fileContent, 'base64')
-      
-      // Validate file size (10MB limit)
-      const maxSize = 10 * 1024 * 1024
-      if (buffer.length > maxSize) {
-        throw new Error(`File size exceeds ${maxSize / (1024 * 1024)}MB limit.`)
-      }
-      
-      try {
-        // Generate a unique filename with timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const uniqueFileName = `${timestamp}-${fileName}`
-        
-        // Check if we have a Vercel Blob token
-        const blobToken = process.env.BLOB_READ_WRITE_TOKEN
-        
-        if (blobToken && blobToken !== 'your_vercel_blob_token_here') {
-          // Upload file to Vercel Blob
-          const blob = await put(uniqueFileName, buffer, {
-            access: 'public',
-            contentType: fileType
-          })
-          
-          return {
-            url: blob.url,
-            fileName: uniqueFileName,
-            size: buffer.length,
-            success: true
-          }
-        } else {
-          // For local development without Vercel Blob, create a mock URL
-          // In production, you would want to use proper file storage
-          const mockUrl = `data:${fileType};base64,${fileContent}`
-          
-          return {
-            url: mockUrl,
-            fileName: uniqueFileName,
-            size: buffer.length,
-            success: true
-          }
-        }
-      } catch (error) {
-        console.error('Error uploading file:', error)
-        throw new Error('Failed to upload file')
-      }
-    }),
-
   parseUploadedFile: protectedProcedure
     .input(z.object({
       fileUrl: z.string().url(),
